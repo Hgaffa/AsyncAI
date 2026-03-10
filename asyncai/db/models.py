@@ -67,7 +67,7 @@ class Base(DeclarativeBase):
 # ---------------------------------------------------------------------------
 
 class Job(Base):
-    """Mirrors the existing PostgreSQL  table.
+    """Mirrors the existing PostgreSQL table.
 
     CRITICAL: job_status enum already exists in PostgreSQL, so
     Enum(..., create_type=False) must be used to avoid a CREATE TYPE clash
