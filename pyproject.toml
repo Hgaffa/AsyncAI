@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "asyncai"
+version = "0.1.0"
+description = "Zero-infrastructure persistent AI workflows"
+requires-python = ">=3.10"
+dependencies = [
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
+    "alembic>=1.12",
+    "python-dotenv>=1.0",
+    "pydantic>=2.5",
+    "fastapi>=0.104",
+    "uvicorn[standard]>=0.24",
+    "prometheus-client>=0.19",
+    "typer>=0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=4.1",
+    "httpx>=0.25",
+    "mypy>=1.7",
+]
+
+[project.scripts]
+asyncai = "asyncai.cli:app"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = [
+    "integration: requires live PostgreSQL",
+    "unit: no external deps",
+]
