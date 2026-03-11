@@ -76,15 +76,15 @@ class Job(Base):
     __tablename__ = "job"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    idempotency_key: Mapped[Optional[str]] = mapped_column(
-        String(255), nullable=True, unique=True, index=True
+    idempotency_key: Mapped[str] = mapped_column(
+        String(255), nullable=False, unique=True, index=True, default=lambda: str(uuid.uuid4())
     )
-    type: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    status: Mapped[Optional[JobStatus]] = mapped_column(
+    type: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus, name="job_status", create_type=False),
-        nullable=True,
+        nullable=False,
     )
-    payload: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     result: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -119,7 +119,7 @@ class Workflow(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     status: Mapped[WorkflowStatus] = mapped_column(
-        Enum(WorkflowStatus, name="workflow_status"),
+        Enum(WorkflowStatus, name="workflow_status", create_type=False),
         nullable=False,
         default=WorkflowStatus.PENDING,
     )
@@ -148,7 +148,7 @@ class WorkflowStep(Base):
     )
     step_name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[StepStatus] = mapped_column(
-        Enum(StepStatus, name="step_status"),
+        Enum(StepStatus, name="step_status", create_type=False),
         nullable=False,
         default=StepStatus.PENDING,
     )

@@ -1,10 +1,13 @@
+"""Exception hierarchy for the asyncai package."""
+
+
 class AsyncAIError(Exception):
-    pass
+    """Base class for all asyncai exceptions."""
 
 
 class UnknownTaskError(AsyncAIError):
-    pass
+    """Raised when a task name is not found in the TaskRegistry."""
 
 
 class WorkflowError(AsyncAIError):
-    pass
+    """Raised for errors encountered during workflow execution."""
