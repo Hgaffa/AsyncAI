@@ -1,36 +1,34 @@
 """
-SQLAlchemy Table Models
+SQLAlchemy ORM models for the synchronous FastAPI application.
+
+These map to the same ``job`` table as ``asyncai.db.models.Job`` but use the
+synchronous engine and the app's own ``Base``.  The two models are kept in
+sync manually; any schema change in an Alembic migration must be reflected
+here and in ``asyncai/db/models.py``.
 """
-from typing import Optional, Dict
+import uuid
 from datetime import datetime
-from sqlalchemy import String, Integer, DateTime, Enum, JSON, func
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
+from typing import Dict, Optional
+
+from sqlalchemy import DateTime, Enum, Integer, JSON, String, func
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.db import Base
 from app.schemas import JobStatus
 
 
-class Job(Base): # pylint: disable=too-few-public-methods
-    """Job"""
+class Job(Base):
+    """ORM mapping of the ``job`` table for the synchronous app layer."""
+
     __tablename__ = "job"
 
-    id: Mapped[int] = mapped_column(
-        Integer,
-        primary_key=True,
-        autoincrement=True,
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     idempotency_key: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-        unique=True,
-        index=True,
+        String(255), nullable=False, unique=True, index=True
     )
 
-    type: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-    )
+    type: Mapped[str] = mapped_column(String(100), nullable=False)
 
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus, name="job_status"),
@@ -38,64 +36,43 @@ class Job(Base): # pylint: disable=too-few-public-methods
         default=JobStatus.PENDING,
     )
 
-    payload: Mapped[Dict] = mapped_column(
-        JSON,
-        nullable=False,
-    )
+    payload: Mapped[Dict] = mapped_column(JSON, nullable=False)
 
-    result: Mapped[Optional[Dict]] = mapped_column(
-        JSON,
-        nullable=True,
-    )
+    result: Mapped[Optional[Dict]] = mapped_column(JSON, nullable=True)
 
-    error_message: Mapped[Optional[str]] = mapped_column(
-        String,
-        nullable=True,
-    )
+    error_message: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
-    attempts: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=0,
-    )
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    max_attempts: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=3,
-    )
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
 
-    # --- Timestamps ---
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        server_default=func.now(), # pylint: disable=not-callable
+        server_default=func.now(),  # pylint: disable=not-callable
     )
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        server_default=func.now(), # pylint: disable=not-callable
-        onupdate=func.now(), # pylint: disable=not-callable
+        server_default=func.now(),  # pylint: disable=not-callable
+        onupdate=func.now(),  # pylint: disable=not-callable
     )
 
     started_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
+        DateTime(timezone=True), nullable=True
     )
 
     finished_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
+        DateTime(timezone=True), nullable=True
     )
 
-    priority: Mapped[int] = mapped_column(
-        Integer,
-        default=5,
-        nullable=False
-    )
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
 
     scheduled_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
+        DateTime(timezone=True), nullable=True
     )
+
+    # workflow_id and step_name exist in the DB (added in the Phase 2 migration)
+    # but are not mapped here because the synchronous app layer does not manage
+    # workflows.  SQLAlchemy silently ignores unmapped columns.
