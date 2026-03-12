@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from pydantic import create_model
 
+from asyncai._context import _active_step_name, _active_workflow_id
 from asyncai.db.models import Job, JobStatus
 from asyncai.db.session import AsyncSessionFactory
 from asyncai.registry import TaskRegistry
@@ -59,6 +60,8 @@ def task(
         async def submit(**kwargs: Any) -> int:
             validated = validator(**kwargs)
             payload = validated.model_dump()
+            ctx_workflow_id = _active_workflow_id.get()
+            ctx_step_name = _active_step_name.get()
             async with AsyncSessionFactory() as session:
                 async with session.begin():
                     job = Job(
@@ -67,6 +70,8 @@ def task(
                         payload=payload,
                         max_attempts=retries,
                         priority=priority,
+                        workflow_id=ctx_workflow_id,
+                        step_name=ctx_step_name,
                     )
                     session.add(job)
                     await session.flush()  # populates job.id
