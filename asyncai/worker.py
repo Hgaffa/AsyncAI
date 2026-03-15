@@ -119,21 +119,20 @@ class AsyncWorker:
         self._semaphore = asyncio.Semaphore(concurrency)
 
     async def _run_one(self) -> int | None:
-        async with self._semaphore:
+        async with self._semaphore: # Async concurrency guard
             return await poll_and_run_one()
 
     async def run_until_empty(self) -> None:
         """Poll and run jobs until the queue is empty.
 
         Launches up to ``concurrency`` concurrent job coroutines per round,
-        stopping when an entire round returns no work.
+        stopping when an entire round returns no work (no more jobs to process).
         """
         while True:
-            results = await asyncio.gather(
+            results = await asyncio.gather( # Waits for all concurrent jobs to returns before gathering next batch
                 *[self._run_one() for _ in range(self._concurrency)]
             )
             if all(r is None for r in results):
                 break
-
 
 __all__ = ["recover_crashed_jobs", "poll_and_run_one", "AsyncWorker"]

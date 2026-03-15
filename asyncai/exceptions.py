@@ -1,6 +1,5 @@
 """Exception hierarchy for the asyncai package."""
 
-
 class AsyncAIError(Exception):
     """Base class for all asyncai exceptions."""
 
