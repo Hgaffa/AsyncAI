@@ -35,6 +35,7 @@ asyncai = "asyncai.cli:app"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+addopts = "-m 'not integration'"
 markers = [
     "integration: requires live PostgreSQL",
     "unit: no external deps",

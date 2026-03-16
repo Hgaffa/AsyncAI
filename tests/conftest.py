@@ -106,8 +106,11 @@ try:
     async def async_db_session():
         if async_engine is None:
             pytest.skip("ASYNCAI_DB_URL not set")
-        async with async_engine.begin() as conn:
-            await conn.run_sync(AsyncBase.metadata.create_all)
+        try:
+            async with async_engine.begin() as conn:
+                await conn.run_sync(AsyncBase.metadata.create_all)
+        except Exception as exc:
+            pytest.skip(f"PostgreSQL unavailable: {exc}")
         # Clean up leftover rows from previous tests so each test starts fresh.
         # Order matters: delete dependents before parents to satisfy FK constraints.
         async with AsyncSessionFactory() as session:
