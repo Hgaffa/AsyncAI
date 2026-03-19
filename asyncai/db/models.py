@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import (
     DateTime,
@@ -31,6 +31,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 # ---------------------------------------------------------------------------
 
 class JobStatus(str, PyEnum):
+    """Life-cycle states for a task job row."""
+
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     COMPLETED = "COMPLETED"
@@ -38,6 +40,8 @@ class JobStatus(str, PyEnum):
 
 
 class WorkflowStatus(str, PyEnum):
+    """Life-cycle states for a workflow row."""
+
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
@@ -45,6 +49,8 @@ class WorkflowStatus(str, PyEnum):
 
 
 class StepStatus(str, PyEnum):
+    """Life-cycle states for a workflow step row."""
+
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
@@ -67,11 +73,11 @@ class Base(DeclarativeBase):
 # ---------------------------------------------------------------------------
 
 class Job(Base):
-    """Mirrors the existing PostgreSQL table.
+    """Persistent record of a single task or workflow execution.
 
-    CRITICAL: job_status enum already exists in PostgreSQL, so
-    Enum(..., create_type=False) must be used to avoid a CREATE TYPE clash
-    during migrations.
+    ``Enum(..., create_type=False)`` is required on all enum columns because
+    the underlying PostgreSQL enum types are created by Alembic migrations,
+    not by SQLAlchemy's ``CREATE TYPE``.
     """
     __tablename__ = "job"
 
@@ -84,8 +90,8 @@ class Job(Base):
         Enum(JobStatus, name="job_status", create_type=False),
         nullable=False,
     )
-    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    result: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    result: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
@@ -99,7 +105,6 @@ class Job(Base):
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
     scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    # New columns added by Plan 03 migration
     workflow_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("workflows.id", ondelete="SET NULL"),
@@ -107,8 +112,7 @@ class Job(Base):
     )
     step_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
-    # No relationship() attrs in Phase 1 -- avoids MissingGreenlet risk
-    # (lazy loading not supported in async context; add explicitly in Phase 2)
+    # No relationship() attrs — lazy loading is not supported in async context (MissingGreenlet)
 
 
 class Workflow(Base):
@@ -123,8 +127,8 @@ class Workflow(Base):
         nullable=False,
         default=WorkflowStatus.PENDING,
     )
-    context: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    result: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    context: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    result: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -172,7 +176,7 @@ class TaskResult(Base):
         ForeignKey("job.id", ondelete="CASCADE"),
         nullable=False,
     )
-    value: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    value: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
 
 
 __all__ = [

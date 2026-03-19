@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import functools
 import inspect
-from typing import Any, Callable
+from typing import Any, Callable, Type
 
-from pydantic import create_model
+from pydantic import BaseModel, create_model
 
 from asyncai._context import _active_step_name, _active_workflow_id
 from asyncai.db.models import Job, JobStatus
@@ -12,7 +12,7 @@ from asyncai.db.session import AsyncSessionFactory
 from asyncai.registry import TaskRegistry
 
 
-def _build_validator(fn: Callable) -> type:
+def _build_validator(fn: Callable[..., Any]) -> Type[BaseModel]:
     """Build a Pydantic model from a function's signature for argument validation."""
     sig = inspect.signature(fn)
     fields: dict[str, Any] = {}
@@ -30,7 +30,7 @@ def _build_validator(fn: Callable) -> type:
 
 
 def task(
-    _fn: Callable | None = None,
+    _fn: Callable[..., Any] | None = None,
     *,
     name: str | None = None,
     retries: int = 3,
@@ -49,7 +49,7 @@ def task(
     arguments via Pydantic, inserts a Job row, and returns the new job id.
     """
 
-    def decorator(fn: Callable) -> Callable:
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         task_name = name or fn.__name__
         validator = _build_validator(fn)
 
@@ -58,6 +58,12 @@ def task(
             return await fn(*args, **kwargs)
 
         async def submit(**kwargs: Any) -> int:
+            """Validate kwargs, insert a Job row, and return the new job id.
+
+            Raises:
+                pydantic.ValidationError: If kwargs do not match the task's
+                    parameter types or required arguments are missing.
+            """
             validated = validator(**kwargs)
             payload = validated.model_dump()
             ctx_workflow_id = _active_workflow_id.get()
@@ -75,7 +81,7 @@ def task(
                     )
                     session.add(job)
                     await session.flush()  # populates job.id
-                    return job.id  # type: ignore[return-value]
+                    return job.id
 
         wrapper.submit = submit  # type: ignore[attr-defined]
         wrapper._task_name = task_name  # type: ignore[attr-defined]

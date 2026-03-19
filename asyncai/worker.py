@@ -35,7 +35,8 @@ async def recover_crashed_jobs(session: AsyncSession) -> None:
         .where(Job.status == JobStatus.PROCESSING)
         .values(
             status=JobStatus.PENDING,
-            finished_at=datetime.datetime.now(datetime.timezone.utc),
+            # Do NOT set finished_at here — the job is being re-queued for
+            # retry, not finished. Preserving started_at helps with debugging.
         )
     )
 
@@ -76,6 +77,8 @@ async def poll_and_run_one() -> int | None:
         # Tx2: execute and persist outcome
         async with session.begin():
             job = await session.get(Job, job_id, with_for_update=True)
+            if job is None:
+                return None  # Should not happen: Tx1 claimed this job_id in the same session
             try:
                 fn = TaskRegistry.instance().get(job.type)
                 return_value: Any = await fn(**job.payload)
@@ -119,7 +122,7 @@ class AsyncWorker:
         self._semaphore = asyncio.Semaphore(concurrency)
 
     async def _run_one(self) -> int | None:
-        async with self._semaphore: # Async concurrency guard
+        async with self._semaphore:
             return await poll_and_run_one()
 
     async def run_until_empty(self) -> None:
@@ -129,7 +132,7 @@ class AsyncWorker:
         stopping when an entire round returns no work (no more jobs to process).
         """
         while True:
-            results = await asyncio.gather( # Waits for all concurrent jobs to returns before gathering next batch
+            results = await asyncio.gather(
                 *[self._run_one() for _ in range(self._concurrency)]
             )
             if all(r is None for r in results):

@@ -41,7 +41,7 @@ class WorkflowHandle:
         self,
         poll_interval: float = 0.5,
         timeout: float = 600.0,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Poll until the workflow reaches COMPLETED or FAILED.
 
         Returns:
@@ -74,7 +74,7 @@ class WorkflowHandle:
 
 
 def workflow(
-    _fn: Callable | None = None,
+    _fn: Callable[..., Any] | None = None,
     *,
     name: str | None = None,
 ) -> Any:
@@ -90,7 +90,7 @@ def workflow(
     a Workflow row and a Job row atomically, returning a WorkflowHandle.
     """
 
-    def decorator(fn: Callable) -> Any:
+    def decorator(fn: Callable[..., Any]) -> Any:
         workflow_name = name or fn.__name__
         internal_name = f"__workflow__.{workflow_name}"
         validator = _build_validator(fn)
@@ -137,8 +137,7 @@ def workflow(
                     return result_dict
 
                 except Exception as exc:  # noqa: BLE001
-                    # CRITICAL: Write error BEFORE re-raising so result() does not
-                    # poll forever (Pitfall 3 from research notes).
+                    # Write error BEFORE re-raising so result() does not poll forever.
                     async with AsyncSessionFactory() as session:
                         async with session.begin():
                             wf = await session.get(Workflow, workflow_id)

@@ -28,7 +28,7 @@ else:
     engine = None
 
 AsyncSessionFactory: async_sessionmaker[AsyncSession] = async_sessionmaker(
-    engine,  # type: ignore[arg-type]
+    engine,
     class_=AsyncSession,
     expire_on_commit=False,
 )
