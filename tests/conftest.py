@@ -1,70 +1,12 @@
 """
-Test configuration and fixtures
-Based on official FastAPI testing documentation
+Pytest configuration and fixtures for asyncai tests.
 """
 import os
-from typing import Generator
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
 
 import pytest
 
-# SQLite test database
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
-
-from app.db import Base, get_db
-from app.main import app
-from fastapi.testclient import TestClient
-
-_engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False}
-)
-
-_TESTINGSESSIONLOCAL = sessionmaker(
-    autocommit=False, autoflush=False, bind=_engine)
-
-
-def override_get_db() -> Generator[Session, None, None]:
-    """Dependency override for database session"""
-    try:
-        db = _TESTINGSESSIONLOCAL()
-        yield db
-    finally:
-        db.close()
-
-
-@pytest.fixture(autouse=True)
-def setup_test_db():
-    """Create tables before each test and drop after"""
-    Base.metadata.create_all(bind=_engine)
-    yield
-    Base.metadata.drop_all(bind=_engine)
-
-
-@pytest.fixture
-def client() -> Generator["TestClient", None, None]:
-    """Create a test client with database override"""
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def db_session() -> Generator[Session, None, None]:
-    """Create a database session for direct database access in tests"""
-    connection = _engine.connect()
-    transaction = connection.begin()
-    session = _TESTINGSESSIONLOCAL(bind=connection)
-    yield session
-    session.close()
-    transaction.rollback()
-    connection.close()
-
-
 # ---------------------------------------------------------------------------
-# TaskRegistry isolation — prevent test_task.py's r._tasks.clear() calls from
+# TaskRegistry isolation — prevents test_task.py's registry.clear() calls from
 # destroying module-level workflow/task registrations needed by later tests.
 # ---------------------------------------------------------------------------
 try:
@@ -82,18 +24,8 @@ except ImportError:
     pass  # asyncai not yet available
 
 
-# Cleanup test database file
-def pytest_sessionfinish():
-    """Cleanup after all tests are done"""
-    if os.path.exists("./test.db"):
-        try:
-            os.remove("./test.db")
-        except Exception:
-            pass
-
-
 # ---------------------------------------------------------------------------
-# Async fixtures for Phase 2 (asyncai worker/task integration tests)
+# Async fixtures for asyncai integration tests (require ASYNCAI_DB_URL)
 # ---------------------------------------------------------------------------
 try:
     import pytest_asyncio
@@ -117,7 +49,7 @@ try:
             async with session.begin():
                 await session.execute(delete(TaskResult))   # FK → job
                 await session.execute(delete(WorkflowStep)) # FK → workflows
-                await session.execute(delete(Job))          # FK → workflows (SET NULL, but delete first)
+                await session.execute(delete(Job))          # FK → workflows (SET NULL)
                 await session.execute(delete(Workflow))
         async with AsyncSessionFactory() as session:
             yield session

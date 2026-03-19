@@ -5,6 +5,9 @@ RED STATE — all tests are expected to fail with NotImplementedError because
 asyncai/gather.py contains a stub implementation only.
 
 Requirements covered: GTHR-01, GTHR-02, GTHR-03, GTHR-04, GTHR-05, GTHR-06
+
+Plan 05-02 additions: unit-level tests for branches not covered by integration
+tests (WorkflowError guard, None TaskResult fallback).
 """
 import uuid
 
@@ -21,9 +24,30 @@ from asyncai.worker import AsyncWorker
 from asyncai.exceptions import WorkflowError
 
 # ---------------------------------------------------------------------------
-# Module-level marker — all tests require a live DB
+# Module-level marker — all tests require a live DB (overridden per-test below)
 # ---------------------------------------------------------------------------
 pytestmark = [pytest.mark.integration]
+
+
+# ---------------------------------------------------------------------------
+# Unit-level tests (no DB required) — cover branches missed by integration suite
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_gather_outside_workflow_raises():
+    """gather() called with no active workflow_id must raise WorkflowError and close coroutines."""
+    # Ensure context var is clear (no active workflow)
+    token = _active_workflow_id.set(None)
+    try:
+        async def dummy_coro() -> int:
+            return 0
+
+        with pytest.raises(WorkflowError, match="gather\\(\\) must be called inside a @workflow function"):
+            await gather([dummy_coro(), dummy_coro()], step_name="step1")
+    finally:
+        _active_workflow_id.reset(token)
 
 
 # ---------------------------------------------------------------------------

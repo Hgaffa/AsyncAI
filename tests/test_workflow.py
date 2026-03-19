@@ -5,6 +5,10 @@ RED STATE — all tests are expected to fail with NotImplementedError because
 asyncai/workflow.py contains a stub implementation only.
 
 Requirements covered: WF-01, WF-02, WF-03, WF-04
+
+Plan 05-02 additions: unit-level tests for branches not covered by integration
+tests (WorkflowHandle.status not found, WorkflowHandle.result not found,
+WorkflowWrapper.__call__, @workflow() with parentheses).
 """
 import uuid
 
@@ -21,8 +25,77 @@ from asyncai.exceptions import WorkflowError
 
 # ---------------------------------------------------------------------------
 # Module-level marker — all tests in this file require a live DB
+# (overridden per-test for unit-level tests)
 # ---------------------------------------------------------------------------
 pytestmark = [pytest.mark.integration]
+
+
+# ---------------------------------------------------------------------------
+# Unit-level tests (no DB required) — cover branches missed by integration suite
+# ---------------------------------------------------------------------------
+
+
+def test_workflow_with_parentheses_registers():
+    """@workflow() with empty parentheses must register the function (line 218 branch)."""
+    @workflow()
+    async def parenthesised_workflow(x: int) -> dict:
+        return {"x": x}
+
+    # If the decorator path works correctly the wrapper has .submit
+    assert hasattr(parenthesised_workflow, "submit")
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_workflow_wrapper_is_callable():
+    """WorkflowWrapper.__call__ must delegate to the underlying function (line 167)."""
+    @workflow
+    async def callable_workflow(x: int) -> int:
+        return x * 3
+
+    result = await callable_workflow(x=4)
+    assert result == 12
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_workflow_handle_status_not_found():
+    """WorkflowHandle.status() must raise WorkflowError when the row doesn't exist (line 37)."""
+    from unittest.mock import AsyncMock, patch, MagicMock
+
+    non_existent_id = uuid.uuid4()
+    handle = WorkflowHandle(id=non_existent_id)
+
+    # Mock the session so it returns None for the workflow
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=None)
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("asyncai.workflow.AsyncSessionFactory", return_value=mock_cm):
+        with pytest.raises(WorkflowError, match=str(non_existent_id)):
+            await handle.status()
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_workflow_handle_result_not_found():
+    """WorkflowHandle.result() must raise WorkflowError when the row doesn't exist (line 60)."""
+    from unittest.mock import AsyncMock, patch, MagicMock
+
+    non_existent_id = uuid.uuid4()
+    handle = WorkflowHandle(id=non_existent_id)
+
+    mock_session = AsyncMock()
+    mock_session.get = AsyncMock(return_value=None)
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("asyncai.workflow.AsyncSessionFactory", return_value=mock_cm):
+        with pytest.raises(WorkflowError, match=str(non_existent_id)):
+            await handle.result(timeout=1.0)
 
 
 # ---------------------------------------------------------------------------

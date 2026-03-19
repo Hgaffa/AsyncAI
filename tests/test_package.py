@@ -1,4 +1,3 @@
-import pytest
 from importlib.metadata import metadata
 
 
@@ -29,3 +28,10 @@ def test_pyproject_metadata():
 def test_db_package_exists():
     import asyncai.db
     assert asyncai.db is not None
+
+
+# ---------------------------------------------------------------------------
+# _stubs.py removed (Plan 05-05)
+# Phase 3 replaced _stubs.py with real implementations in workflow.py and
+# gather.py. The stub file is deleted; these tests are no longer meaningful.
+# ---------------------------------------------------------------------------
