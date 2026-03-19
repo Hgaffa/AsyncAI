@@ -1,8 +1,7 @@
 """
 asyncai CLI — command-line interface for database management and worker control.
 
-CLI-05: ASYNCAI_DB_URL loaded from .env by asyncai.db.session at import time.
-Importing this module triggers load_dotenv() via asyncai.db.session.
+ASYNCAI_DB_URL is loaded from a .env file by asyncai.db.session at import time.
 """
 from __future__ import annotations
 
@@ -12,6 +11,7 @@ import os
 import sys
 import uuid
 from pathlib import Path
+from typing import Any
 
 import typer
 from alembic import command as alembic_command
@@ -19,8 +19,7 @@ from alembic.config import Config as AlembicConfig
 from rich.console import Console
 from rich.table import Table
 
-# CLI-05: importing asyncai.db.session triggers load_dotenv() at module level.
-# This import is intentional — it is the mechanism for .env support.
+# Importing asyncai.db.session triggers load_dotenv() at module level.
 from asyncai.db.session import AsyncSessionFactory  # noqa: F401
 
 # ---------------------------------------------------------------------------
@@ -36,7 +35,7 @@ app.add_typer(worker_app, name="worker")
 
 
 # ---------------------------------------------------------------------------
-# CLI-01: asyncai db migrate
+# asyncai db migrate
 # ---------------------------------------------------------------------------
 
 
@@ -53,7 +52,7 @@ def migrate() -> None:
 
 
 # ---------------------------------------------------------------------------
-# CLI-02: asyncai worker start
+# asyncai worker start
 # ---------------------------------------------------------------------------
 
 
@@ -87,14 +86,14 @@ def start(
 
 
 # ---------------------------------------------------------------------------
-# CLI-03: asyncai workflows (list)
+# asyncai workflows (list)
 # ---------------------------------------------------------------------------
 
 
-def _fetch_workflows(limit: int) -> list:
+def _fetch_workflows(limit: int) -> list[Any]:
     """Return a list of recent Workflow rows ordered by created_at desc."""
 
-    async def _query() -> list:
+    async def _query() -> list[Any]:
         from sqlalchemy import select
         from asyncai.db.models import Workflow
 
@@ -126,14 +125,14 @@ def workflows_list(
 
 
 # ---------------------------------------------------------------------------
-# CLI-04: asyncai workflow <id> (inspect)
+# asyncai workflow <id> (inspect)
 # ---------------------------------------------------------------------------
 
 
-def _fetch_workflow_detail(wid: uuid.UUID) -> tuple:
+def _fetch_workflow_detail(wid: uuid.UUID) -> tuple[Any, ...]:
     """Return (Workflow | None, list[WorkflowStep]) for the given workflow UUID."""
 
-    async def _query() -> tuple:
+    async def _query() -> tuple[Any, ...]:
         from sqlalchemy import select
         from asyncai.db.models import Workflow, WorkflowStep
 
@@ -184,4 +183,100 @@ def workflow_inspect(
         console.print(step_table)
 
 
-__all__ = ["app"]
+# ---------------------------------------------------------------------------
+# asyncai jobs (list)
+# ---------------------------------------------------------------------------
+
+
+def _fetch_jobs(limit: int) -> list[Any]:
+    """Return a list of recent standalone Job rows (no workflow_id) ordered by created_at desc."""
+
+    async def _query() -> list[Any]:
+        from sqlalchemy import select
+        from asyncai.db.models import Job
+
+        async with AsyncSessionFactory() as session:
+            result = await session.execute(
+                select(Job)
+                .where(Job.workflow_id.is_(None))
+                .order_by(Job.created_at.desc())
+                .limit(limit)
+            )
+            return list(result.scalars().all())
+
+    return asyncio.run(_query())
+
+
+def _fetch_job_detail(job_id: int) -> Any:
+    """Return a single Job row by id, or None if not found."""
+
+    async def _query() -> Any:
+        from asyncai.db.models import Job
+
+        async with AsyncSessionFactory() as session:
+            return await session.get(Job, job_id)
+
+    return asyncio.run(_query())
+
+
+@app.command("jobs")
+def jobs_list(
+    limit: int = typer.Option(20, "--limit", help="Max rows to display"),
+) -> None:
+    """List recent standalone task jobs (no workflow context)."""
+    rows = _fetch_jobs(limit)
+    console = Console()
+    table = Table(title="Recent Jobs", show_lines=False)
+    table.add_column("ID", style="cyan")
+    table.add_column("Type")
+    table.add_column("Status", style="magenta")
+    table.add_column("Attempts")
+    table.add_column("Created At")
+    table.add_column("Result Summary")
+    for job in rows:
+        summary = (
+            str(job.result)[:60]
+            if job.result
+            else (job.error_message[:60] if job.error_message else "\u2014")
+        )
+        table.add_row(
+            str(job.id),
+            job.type,
+            job.status.value,
+            str(job.attempts),
+            str(job.created_at),
+            summary,
+        )
+    console.print(table)
+
+
+# ---------------------------------------------------------------------------
+# asyncai job <id> (inspect)
+# ---------------------------------------------------------------------------
+
+
+@app.command("job")
+def job_inspect(
+    job_id: int = typer.Argument(..., help="Job ID to inspect."),
+) -> None:
+    """Inspect a specific standalone task job by ID."""
+    job = _fetch_job_detail(job_id)
+    if job is None:
+        typer.echo(f"Job {job_id} not found.", err=True)
+        raise typer.Exit(code=1)
+    console = Console()
+    console.print(f"[bold]Job:[/bold]      {job.id}")
+    console.print(f"[bold]Type:[/bold]     {job.type}")
+    console.print(f"[bold]Status:[/bold]   {job.status.value}")
+    console.print(f"[bold]Attempts:[/bold] {job.attempts}/{job.max_attempts}")
+    console.print(f"[bold]Created:[/bold]  {job.created_at}")
+    console.print(f"[bold]Started:[/bold]  {job.started_at}")
+    console.print(f"[bold]Finished:[/bold] {job.finished_at}")
+    console.print(f"[bold]Payload:[/bold]  {job.payload}")
+    if job.result is not None:
+        console.print(f"[bold]Result:[/bold]   {job.result}")
+    if job.error_message is not None:
+        console.print(f"[bold]Error:[/bold]    {job.error_message}")
+
+
+__all__ = ["app", "_fetch_jobs", "_fetch_job_detail"]
